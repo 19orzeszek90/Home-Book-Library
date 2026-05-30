@@ -11,9 +11,12 @@ interface BookDetailModalProps {
   onEdit: () => void;
   onDelete: () => void;
   onMoveToLibrary: () => void;
+  onBorrow: () => void;
+  onReturn: () => void;
+  activeBorrowing: any;
 }
 
-const BookDetailModal: React.FC<BookDetailModalProps> = ({ book, onClose, onEdit, onDelete, onMoveToLibrary }) => {
+const BookDetailModal: React.FC<BookDetailModalProps> = ({ book, onClose, onEdit, onDelete, onMoveToLibrary, onBorrow, onReturn, activeBorrowing }) => {
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -116,7 +119,36 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({ book, onClose, onEdit
                     })}
                 </div>
             )}
-            
+
+            {/* Borrowing section */}
+            <div className="mt-6 p-4 rounded-xl border border-white/5">
+              {activeBorrowing ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono text-amber-500 uppercase tracking-widest font-bold">📖 Borrowed</span>
+                    <p className="text-sm text-brand-text mt-1">{activeBorrowing.BorrowerName}</p>
+                    <p className="text-[10px] text-brand-subtle">📞 {activeBorrowing.Phone || '-'}  ✉️ {activeBorrowing.Email || '-'}</p>
+                    <p className="text-[10px] text-brand-subtle">From: {activeBorrowing.BorrowDate?.slice(0,10)}  Due: {activeBorrowing.DueDate?.slice(0,10)}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={onBorrow} className="bg-amber-600/20 hover:bg-amber-600 text-amber-500 hover:text-white border border-amber-500/30 font-mono font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all">
+                      Extend
+                    </button>
+                    <button onClick={onReturn} className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/30 font-mono font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all">
+                      Return
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-brand-subtle uppercase tracking-widest">📗 Available — not borrowed</span>
+                  <button onClick={onBorrow} className="bg-brand-accent/10 hover:bg-brand-accent text-brand-accent hover:text-brand-primary font-mono font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all">
+                    Borrow
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="mt-auto pt-10 flex justify-end items-center gap-4">
               {book.is_wishlist && (
                   <button onClick={onMoveToLibrary} className="bg-green-600 hover:bg-green-500 text-white font-mono font-bold py-3 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(22,163,74,0.3)] uppercase text-xs tracking-widest">

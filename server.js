@@ -119,6 +119,23 @@ const initializeDatabase = async () => {
                 );
             `);
         }
+        // Create borrowings table if not exists
+        const borrowRes = await client.query(`SELECT to_regclass('public.borrowings')`);
+        if (borrowRes.rows[0].to_regclass === null) {
+            await client.query(`
+                CREATE TABLE borrowings (
+                    "ID" SERIAL PRIMARY KEY,
+                    "BookID" INTEGER NOT NULL REFERENCES books("ID") ON DELETE CASCADE,
+                    "BorrowerName" TEXT NOT NULL,
+                    "Phone" TEXT,
+                    "Email" TEXT,
+                    "BorrowDate" DATE NOT NULL,
+                    "DueDate" DATE NOT NULL,
+                    "ReturnedDate" DATE,
+                    "CreatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        }
     } catch (err) {
         console.error('Error during database initialization:', err);
         process.exit(1);
@@ -382,6 +399,88 @@ app.get('/api/scan-isbn/:isbn', async (req, res) => {
     }
 });
 
+// ─── Borrowing endpoints ───
+
+app.get('/api/borrowings', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT b.*, books."Title", books."Author" FROM borrowings b LEFT JOIN books ON b."BookID" = books."ID" ORDER BY b."BorrowDate" DESC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/borrowings/active', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT b.*, books."Title", books."Author" FROM borrowings b LEFT JOIN books ON b."BookID" = books."ID" WHERE b."ReturnedDate" IS NULL ORDER BY b."DueDate" ASC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/borrowings/book/:bookId', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM borrowings WHERE "BookID" = $1 AND "ReturnedDate" IS NULL', [req.params.bookId]);
+        res.json(result.rows[0] || null);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/borrowings', async (req, res) => {
+    const { bookId, borrowerName, phone, email, borrowDate, dueDate } = req.body;
+    if (!bookId || !borrowerName || !borrowDate || !dueDate) {
+        return res.status(400).json({ error: 'bookId, borrowerName, borrowDate and dueDate are required' });
+    }
+    try {
+        const result = await pool.query(
+            `INSERT INTO borrowings ("BookID", "BorrowerName", "Phone", "Email", "BorrowDate", "DueDate")
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [bookId, borrowerName, phone || null, email || null, borrowDate, dueDate]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/borrowings/:id/return', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `UPDATE borrowings SET "ReturnedDate" = CURRENT_DATE WHERE "ID" = $1 AND "ReturnedDate" IS NULL RETURNING *`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Borrowing not found or already returned' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/borrowings/:id', async (req, res) => {
+    const { borrowerName, phone, email, dueDate } = req.body;
+    try {
+        const result = await pool.query(
+            `UPDATE borrowings SET "BorrowerName" = COALESCE($1, "BorrowerName"), "Phone" = $2, "Email" = $3, "DueDate" = COALESCE($4, "DueDate") WHERE "ID" = $5 RETURNING *`,
+            [borrowerName || null, phone !== undefined ? phone : null, email !== undefined ? email : null, dueDate || null, req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Borrowing not found' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/borrowings/:id', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM borrowings WHERE "ID" = $1', [req.params.id]);
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -390,3 +489,4 @@ app.listen(port, () => {
     initializeDatabase();
     console.log(`Server is running on http://localhost:${port}`);
 });
+

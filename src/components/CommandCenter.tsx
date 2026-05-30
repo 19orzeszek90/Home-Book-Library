@@ -1,8 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Book } from '../App';
 import { 
-  TrashIcon, 
   AdjustmentsIcon, 
   SearchIcon, 
   ChevronDownIcon, 
@@ -31,6 +30,9 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
   const [tableSearch, setTableSearch] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: null });
+  const [tab, setTab] = useState<'books' | 'borrowings'>('books');
+  const [borrowings, setBorrowings] = useState<any[]>([]);
+  const [borrowingsLoaded, setBorrowingsLoaded] = useState(false);
   
   // Bulk Edit States
   const [bulkField, setBulkField] = useState<string>('');
@@ -155,6 +157,27 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
     });
   };
 
+  // Load borrowings when tab switches
+  const loadBorrowings = async () => {
+    if (borrowingsLoaded) return;
+    try {
+      const res = await fetch(`${API_URL}/api/borrowings/active`);
+      if (res.ok) {
+        setBorrowings(await res.json());
+        setBorrowingsLoaded(true);
+      }
+    } catch (e) {}
+  };
+  // Load borrowings once on mount (so count is accurate in the tab header)
+  React.useEffect(() => { loadBorrowings(); }, []);
+
+  const handleReturnBorrowing = async (id: number) => {
+    try {
+      await fetch(`${API_URL}/api/borrowings/${id}/return`, { method: 'PUT' });
+      setBorrowings(prev => prev.filter(b => b.ID !== id));
+    } catch (e) { alert('Error returning book'); }
+  };
+
   const SortIcon = ({ column }: { column: keyof Book }) => {
     if (sortConfig.key !== column) return <ChevronDownIcon className="h-3 w-3 opacity-20" />;
     return sortConfig.direction === 'asc' ? <ChevronUpIcon className="h-3 w-3 text-brand-accent" /> : <ChevronDownIcon className="h-3 w-3 text-brand-accent" />;
@@ -204,8 +227,18 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex gap-0 mb-4 bg-slate-900/50 rounded-xl p-1 border border-white/5 self-start">
+        <button onClick={() => setTab('books')} className={`px-6 py-2 text-xs font-mono uppercase tracking-widest rounded-lg transition-all ${tab === 'books' ? 'bg-brand-accent text-brand-primary font-bold' : 'text-brand-subtle hover:text-brand-text'}`}>
+          📚 Books ({books.length})
+        </button>
+        <button onClick={() => setTab('borrowings')} className={`px-6 py-2 text-xs font-mono uppercase tracking-widest rounded-lg transition-all ${tab === 'borrowings' ? 'bg-brand-accent text-brand-primary font-bold' : 'text-brand-subtle hover:text-brand-text'}`}>
+          📖 Borrowings ({borrowings.length})
+        </button>
+      </div>
+
       {/* Bulk Action Bar */}
-      {selectedIds.size > 0 && (
+      {tab === 'books' && selectedIds.size > 0 && (
         <div className="bg-brand-accent/10 border border-brand-accent/30 p-4 rounded-xl mb-6 flex flex-wrap items-center gap-4 animate-in slide-in-from-top-4">
             <div className="flex items-center gap-2 pr-4 border-r border-brand-accent/20">
                 <span className="text-xs font-mono font-bold text-brand-accent uppercase tracking-widest">{selectedIds.size} Selected</span>
@@ -268,7 +301,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
         </div>
       )}
 
-      {/* Main Table View */}
+      {tab === 'books' && (
       <div className="flex-grow overflow-auto glass-panel rounded-2xl border-white/5 shadow-2xl relative scrollbar-thin">
         <table className="w-full text-left font-mono text-[11px] border-collapse table-fixed">
             <thead className="bg-slate-900/90 sticky top-0 z-10 border-b border-white/10">
@@ -353,6 +386,44 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
             </div>
         )}
       </div>
+      )}
+
+      {tab === 'borrowings' && (
+        <div className="flex-grow overflow-auto">
+          {borrowings.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-brand-subtle/50 font-mono text-sm uppercase tracking-widest">No active borrowings</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {borrowings.map(b => {
+                const overdue = !b.ReturnedDate && new Date(b.DueDate) < new Date();
+                return (
+                  <div key={b.ID} className={`bg-slate-900/50 border ${overdue ? 'border-red-500/30' : 'border-white/5'} p-4 rounded-xl flex items-center justify-between gap-4`}>
+                    <div className="flex-grow min-w-0">
+                      <p className="text-sm font-bold text-brand-text truncate">{b.Title || `Książka #${b.BookID}`}</p>
+                      <p className="text-xs text-brand-accent">{b.Author || ''}</p>
+                      <div className="flex gap-4 text-[10px] text-brand-subtle mt-1">
+                        <span>👤 {b.BorrowerName}</span>
+                        {b.Phone && <span>📞 {b.Phone}</span>}
+                        {b.Email && <span>✉️ {b.Email}</span>}
+                        <span>📅 {b.BorrowDate?.slice(0,10)} → {b.ReturnedDate?.slice(0,10) || <span className="text-amber-400">{b.DueDate?.slice(0,10)}{overdue ? ' ❗' : ''}</span>}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {!b.ReturnedDate && (
+                        <button onClick={() => handleReturnBorrowing(b.ID)} className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/30 font-bold py-2 px-3 rounded-lg text-[10px] uppercase tracking-widest transition-all">
+                          Return
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <footer className="mt-4 flex justify-between items-center text-[10px] font-mono text-slate-600 uppercase tracking-[0.2em]">
           <div className="flex gap-6">

@@ -8,6 +8,7 @@ import BookDetailModal from './components/BookDetailModal';
 import ReadingJourneyModal from './components/ReadingJourneyModal';
 import CommandCenter from './components/CommandCenter';
 import CollectionView from './components/CollectionView';
+import BorrowFormModal from './components/BorrowFormModal';
 import BackupRestoreModal from './components/BackupRestoreModal';
 import ReadingGoalBanner from './components/ReadingGoalBanner';
 import ViewSwitcher from './components/ViewSwitcher';
@@ -84,6 +85,8 @@ function AppContent() {
 
   const [editingBook, setEditingBook] = useState<Book | Partial<Book> | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [borrowModalBook, setBorrowModalBook] = useState<Book | null>(null);
+  const [borrowings, setBorrowings] = useState<any[]>([]);
 
   const [sortBy, setSortBy] = useState<SortKey>(() => (localStorage.getItem('sortBy') as SortKey) || 'Title');
   const [sortDirection, setSortDirection] = useState<SortDirection>(() => (localStorage.getItem('sortDirection') as SortDirection) || 'asc');
@@ -92,6 +95,13 @@ function AppContent() {
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   
   const { showConfirmation } = useConfirmation();
+
+  const fetchBorrowings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/borrowings/active`);
+      if (res.ok) setBorrowings(await res.json());
+    } catch (e) {}
+  }, []);
 
   const fetchBooks = useCallback(async () => {
     setIsLoading(true);
@@ -118,7 +128,8 @@ function AppContent() {
 
   useEffect(() => {
     fetchBooks();
-  }, [fetchBooks]);
+    fetchBorrowings();
+  }, [fetchBooks, fetchBorrowings]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -457,7 +468,8 @@ function AppContent() {
       {isBackupRestoreModalOpen && <BackupRestoreModal onClose={() => setIsBackupRestoreModalOpen(false)} onExportCSV={() => window.location.href=`${API_URL}/api/books/export`} onFullBackup={handleFullBackup} onRestore={handleFileRestore} />}
       {isAiAssistantOpen && <AIAssistantModal books={books} onClose={() => setIsAiAssistantOpen(false)} onBookSelect={handleShowDetails} />}
       {isSortModalOpen && <SortModal isOpen={isSortModalOpen} onClose={() => setIsSortModalOpen(false)} currentSortBy={sortBy} currentSortDirection={sortDirection} onApplySort={(key, dir) => { handleSortChange(key, dir); setIsSortModalOpen(false); }} />}
-      {selectedBook && <BookDetailModal book={selectedBook} onClose={() => setSelectedBook(null)} onEdit={() => { setSelectedBook(null); handleOpenFormModal(selectedBook); }} onDelete={() => { setSelectedBook(null); handleDeleteBook(selectedBook.ID); }} onMoveToLibrary={() => handleMoveToLibrary(selectedBook)} />}
+      {selectedBook && <BookDetailModal book={selectedBook} onClose={() => setSelectedBook(null)} onEdit={() => { setSelectedBook(null); handleOpenFormModal(selectedBook); }} onDelete={() => { setSelectedBook(null); handleDeleteBook(selectedBook.ID); }} onMoveToLibrary={() => handleMoveToLibrary(selectedBook)} onBorrow={() => setBorrowModalBook(selectedBook)} onReturn={async () => { const b = borrowings.find((x: any) => x.BookID === selectedBook.ID && !x.ReturnedDate); if (b) { await fetch(`${API_URL}/api/borrowings/${b.ID}/return`, { method: 'PUT' }); fetchBorrowings(); setSelectedBook(null); } }} activeBorrowing={borrowings.find((b: any) => b.BookID === selectedBook.ID && !b.ReturnedDate) || null} />}
+      {borrowModalBook && <BorrowFormModal bookTitle={borrowModalBook.Title || ''} bookId={borrowModalBook.ID} existingBorrowing={borrowings.find((b: any) => b.BookID === borrowModalBook.ID && !b.ReturnedDate) || null} onClose={() => setBorrowModalBook(null)} onSaved={fetchBorrowings} />}
     </div>
   );
 }
