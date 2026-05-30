@@ -45,7 +45,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
 
             <div className="space-y-4 w-full">
                 <a
-                  href="https://github.com/19orzeszek90/Home-Book-Library-v1"
+                  href="https://github.com/19orzeszek90/Home-Book-Library"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-3 bg-slate-900 hover:bg-slate-800 text-brand-accent border border-brand-accent/30 font-mono text-[10px] uppercase font-bold py-3 px-6 rounded-xl transition-all shadow-lg hover:shadow-brand-accent/10"

@@ -63,8 +63,8 @@ A professional, high-performance web application designed for bibliophiles who n
 
 ```bash
 # 1. Clone
-git clone https://github.com/19orzeszek90/Home-Book-Library-v1.git
-cd Home-Book-Library-v1
+git clone https://github.com/19orzeszek90/Home-Book-Library.git
+cd Home-Book-Library
 
 # 2. Build & launch
 docker compose up --build -d
