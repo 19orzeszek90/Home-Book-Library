@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import BookCard from './components/BookCard';
 import BookFormModal from './components/BookFormModal';
-import SearchBookModal from './components/SearchBookModal';
 import QuickScanModal from './components/QuickScanModal';
 import AboutModal from './components/AboutModal';
 import BookDetailModal from './components/BookDetailModal';
@@ -57,7 +56,6 @@ export type GridSize = 'compact' | 'default' | 'cozy';
 export type ViewMode = 'library' | 'wishlist' | 'collection' | 'command-center';
 
 const API_URL = (import.meta as any).env.VITE_API_URL || '';
-const API_KEY_PLACEHOLDER = 'WKLEJ_TU_SWOJ_KLUCZ';
 
 function AppContent() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -74,7 +72,6 @@ function AppContent() {
   });
   
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isQuickScanModalOpen, setIsQuickScanModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isJourneyModalOpen, setIsJourneyModalOpen] = useState(false);
@@ -95,11 +92,6 @@ function AppContent() {
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   
   const { showConfirmation } = useConfirmation();
-
-  const isApiKeyMissing = useMemo(() => {
-    const key = (process.env.API_KEY || '').trim();
-    return !key || key === API_KEY_PLACEHOLDER;
-  }, []);
 
   const fetchBooks = useCallback(async () => {
     setIsLoading(true);
@@ -297,12 +289,6 @@ function AppContent() {
 
   return (
     <div className="min-h-screen">
-      {isApiKeyMissing && (
-        <div className="bg-orange-600 text-white px-4 py-2 text-center text-[10px] font-mono font-bold uppercase tracking-[0.2em] animate-pulse z-[60] sticky top-0 border-b border-orange-400">
-          ⚠️ CRITICAL_ALERT: GEMINI_API_KEY NOT CONFIGURED. AI FEATURES DISABLED.
-        </div>
-      )}
-
       {isProcessing && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[101] flex flex-col justify-center items-center text-center">
             <div className="w-16 h-16 border-4 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin"></div>
@@ -363,7 +349,6 @@ function AppContent() {
                     </a>
                     <div className="border-t border-white/5 mx-2 my-1"></div>
                     <a onClick={() => handleOpenFormModal()} className="cursor-pointer flex items-center px-4 py-3 text-xs font-mono uppercase tracking-widest text-brand-text hover:bg-brand-accent/10 transition-colors">Add Manually</a>
-                    <a onClick={() => setIsSearchModalOpen(true)} className="cursor-pointer flex items-center px-4 py-3 text-xs font-mono uppercase tracking-widest text-brand-text hover:bg-brand-accent/10 transition-colors">Search Online</a>
                   </div>
                 )}
               </div>
@@ -465,17 +450,8 @@ function AppContent() {
         )}
       </main>
 
-      {!isApiKeyMissing && (
-        <div className="fixed bottom-8 right-8 z-40">
-          <button onClick={() => setIsAiAssistantOpen(true)} className="relative p-5 bg-slate-950 text-brand-accent rounded-2xl border border-brand-accent/40 shadow-2xl hover:scale-110 active:scale-95 transition-all group">
-            <SparklesIcon className="h-8 w-8 relative z-10" />
-          </button>
-        </div>
-      )}
-
-      {isFormModalOpen && <BookFormModal book={editingBook} books={books} onClose={() => { setIsFormModalOpen(false); setEditingBook(null); setReturnToQuickScan(false); }} onSave={handleFormSave} />}
-      {isSearchModalOpen && <SearchBookModal onClose={() => setIsSearchModalOpen(false)} onSelectBook={(data) => { setIsSearchModalOpen(false); handleOpenFormModal(data); }} />}
       {isQuickScanModalOpen && <QuickScanModal books={books} onClose={() => setIsQuickScanModalOpen(false)} onAddSuccess={fetchBooks} onManualEdit={(book) => { handleOpenFormModal(book, true); }} />}
+      {isFormModalOpen && <BookFormModal book={editingBook} books={books} onClose={() => { setIsFormModalOpen(false); setEditingBook(null); }} onSave={handleFormSave} />}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
       {isJourneyModalOpen && <ReadingJourneyModal books={libraryBooks} onClose={() => setIsJourneyModalOpen(false)} onBookSelect={handleShowDetails}/>}
       {isBackupRestoreModalOpen && <BackupRestoreModal onClose={() => setIsBackupRestoreModalOpen(false)} onExportCSV={() => window.location.href=`${API_URL}/api/books/export`} onFullBackup={handleFullBackup} onRestore={handleFileRestore} />}

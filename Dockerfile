@@ -4,11 +4,6 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Add build argument for the API Key
-ARG GEMINI_API_KEY
-# Set it as an environment variable so Vite can see it during 'npm run build'
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
-
 COPY package*.json ./
 RUN npm install
 
@@ -24,7 +19,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY server.js .
+COPY server.js scraper-service.js ./
 
 # Create storage and upload directories and set permissions
 RUN mkdir -p /app/storage/covers /app/uploads && \

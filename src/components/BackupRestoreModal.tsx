@@ -81,7 +81,7 @@ const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ onClose, onExpo
                 Inbound Data Restore
             </h3>
             <div className="bg-slate-900/50 border border-white/5 p-6 rounded-2xl relative group overflow-hidden">
-                <div className="absolute inset-0 bg-brand-accent/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-0 bg-brand-accent/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                 <p className="text-[10px] font-mono text-brand-subtle uppercase mb-6 tracking-tighter opacity-70 text-center leading-relaxed">
                     Access Core System Snapshots (.json) to re-synchronize node. System will automatically resolve identity overlaps.
                 </p>

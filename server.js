@@ -12,6 +12,7 @@ import { pipeline } from 'stream';
 import { promisify } from 'util';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { scanByIsbn } from './scraper-service.js';
 
 dotenv.config();
 
@@ -360,6 +361,22 @@ app.get('/api/search', async (req, res) => {
             };
         });
         res.json(results);
+    } catch (e) {
+        // Google Books API niedostępne (quota exceeded itd.) — zwróć puste wyniki
+        // Frontend pokaże wtedy opcję scrapra zamiast błędu
+        res.json([]);
+    }
+});
+
+// Skanowanie ISBN przez scraper (zamiennik Gemini AI)
+app.get('/api/scan-isbn/:isbn', async (req, res) => {
+    const { isbn } = req.params;
+    try {
+        const result = await scanByIsbn(isbn);
+        if (result.error) {
+            return res.status(404).json({ error: result.error });
+        }
+        res.json(result);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

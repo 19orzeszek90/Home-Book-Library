@@ -22,8 +22,6 @@ npm-debug.log*
 # Instructions
 INSTRUCTIONS.md
 README.md
-APP_BUILD_INSTRUCTIONS.txt
-BUILD_CONTEXT_EXCLUSIONS_LIST.txt
 
 # Persistent storage folder (managed by volume)
 storage

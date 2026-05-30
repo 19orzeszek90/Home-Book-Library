@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
 import type { Book } from '../App';
 import { TerminalIcon, PlusIcon, TrashIcon, SearchIcon, EditIcon, SparklesIcon } from './Icons';
 import { useConfirmation } from '../contexts/ConfirmationContext';
@@ -88,40 +87,47 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
     }
 
     try {
-      const searchResponse = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(isbn)}`);
-      if (!searchResponse.ok) throw new Error('Search failed');
-      const results = await searchResponse.json();
+      const response = await fetch(`${API_URL}/api/scan-isbn/${encodeURIComponent(isbn)}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}`);
+      }
+      const data = await response.json();
 
-      if (!results || results.length === 0) {
-        addLog(`ISBN ${isbn} not found. AI Discovery suggested.`, 'error');
+      if (data.error) {
+        addLog(`ISBN ${isbn} not found. Try manual entry.`, 'error');
         setPendingUnresolved(isbn);
+        setIsProcessing(false);
         return;
       }
 
-      const bestMatch = results[0];
-      const foundIsbn = bestMatch.isbn?.replace(/[-\s]/g, '');
-      if (foundIsbn) {
-          const matchedDuplicate = books.find(b => b.ISBN?.replace(/[-\s]/g, '') === foundIsbn);
-          if (matchedDuplicate) {
-              addLog(`Found "${bestMatch.title}", but it's already in library.`, 'info');
-              setLastScannedBook(matchedDuplicate);
-              setIsDuplicateDetected(true);
-              return;
-          }
+      addLog(`Found: "${data.title}" (${data.source})`, 'success');
+
+      let safeRating = data.rating !== null && data.rating !== undefined ? Number(data.rating) : undefined;
+      if (safeRating !== undefined && safeRating > 5) {
+        safeRating = safeRating / 2;
+      }
+      if (safeRating !== undefined) {
+        safeRating = Math.min(5, Math.max(0, safeRating));
       }
 
-      addLog(`Found: "${bestMatch.title}"`, 'success');
-
       const bookData: Partial<Book> = {
-        Title: bestMatch.title,
-        Author: bestMatch.authors?.join(', '),
-        Publisher: bestMatch.publisher,
-        "Published Date": bestMatch.publishedDate,
-        Summary: bestMatch.summary,
-        ISBN: bestMatch.isbn || isbn,
-        Pages: bestMatch.pages,
-        "Image Url": bestMatch.imageUrl,
-        Rating: bestMatch.rating ? Math.min(5, Math.max(0, bestMatch.rating)) : undefined,
+        Title: data.title,
+        Author: data.author,
+        Publisher: data.publisher,
+        "Published Date": data.publishedDate ? String(data.publishedDate).substring(0, 4) : undefined,
+        Summary: data.summary,
+        ISBN: data.isbn || isbn,
+        Pages: data.pages,
+        "Image Url": data.imageUrl,
+        Rating: safeRating,
+        Language: data.language,
+        Format: data.format,
+        Series: data.series,
+        Volume: data.volume,
+        Tags: data.tags || '',
+        Genres: data.genres || data.category || '',
+        "Item Url": data.itemUrl || '',
         is_wishlist: false,
         "Added Date": new Date().toISOString()
       };
@@ -136,96 +142,68 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
       
       const savedBook = await saveResponse.json();
       setLastScannedBook(savedBook);
-      addLog(`Successfully logged "${bestMatch.title}".`, 'success');
+      addLog(`Successfully logged "${data.title}".`, 'success');
       onAddSuccess();
 
     } catch (err) {
       addLog(`Error processing ${isbn}: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      setPendingUnresolved(isbn);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleAiDeepScan = async () => {
-    const key = (process.env.API_KEY || '').trim();
-    if (!pendingUnresolved || !key || key === 'WKLEJ_TU_SWOJ_KLUCZ') {
-        alert("Valid Gemini API Key not found. Please check your configuration.");
-        return;
-    }
-    
-    setIsAiScanning(true);
-    addLog(`Deep scanning for ISBN ${pendingUnresolved}...`, 'ai');
-    
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Provide complete metadata for book with ISBN: ${pendingUnresolved}. 
-        ${unresolvedNote ? `User note: "${unresolvedNote}".` : ""}
-        IMPORTANT: Search Polish sites like lubimyczytac.pl first. 
-        Summary, genres, and tags MUST be in Polish.
-        Try to find a high quality cover image URL from lubimyczytac.pl or goodreads.com. 
-        Format should be e.g. "Oprawa twarda" or "Oprawa miękka". 
-        Language should be "Polski" or "Angielski".
-        Genres and Tags must be in Polish and start with Uppercase.
-        RATING_SCALE: If you find a rating on a 10-point scale (e.g. 7.4/10), you MUST convert it to a 5-point scale (e.g. 3.7/5). The maximum value must be 5.0.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              author: { type: Type.STRING },
-              publisher: { type: Type.STRING },
-              publishedDate: { type: Type.STRING, description: "Year (YYYY)" },
-              summary: { type: Type.STRING },
-              pages: { type: Type.INTEGER },
-              imageUrl: { type: Type.STRING, description: "Direct URL to a cover image" },
-              genres: { type: Type.ARRAY, items: { type: Type.STRING } },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              language: { type: Type.STRING },
-              rating: { type: Type.NUMBER, description: "Average rating on a STRICT 0.0 to 5.0 scale." },
-              format: { type: Type.STRING, description: "e.g. Oprawa twarda" },
-              series: { type: Type.STRING },
-              volume: { type: Type.INTEGER }
-            },
-            required: ["title", "author"]
-          }
-        }
-      });
+  const handleScraperScan = async () => {
+    if (!pendingUnresolved) return;
 
-      const text = response.text;
-      if (!text) throw new Error("Empty AI response");
-      const data = JSON.parse(text);
-      
-      addLog(`AI Identity Discovery: "${data.title}"`, 'success');
-      
-      // Safety clamp for rating
-      const rawRating = data.rating !== undefined ? Number(data.rating) : undefined;
-      const safeRating = rawRating !== undefined ? Math.min(5, Math.max(0, rawRating)) : undefined;
+    setIsAiScanning(true);
+    addLog(`Scanning ISBN ${pendingUnresolved} on lubimyczytac.pl...`, 'ai');
+
+    try {
+      const response = await fetch(`${API_URL}/api/scan-isbn/${encodeURIComponent(pendingUnresolved)}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}`);
+      }
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      addLog(`Found: "${data.title}" (${data.source})`, 'success');
+
+      // Konwersja ratingu z skali 10 na 5 (jeśli potrzebne)
+      let safeRating = data.rating !== null && data.rating !== undefined ? Number(data.rating) : undefined;
+      if (safeRating !== undefined && safeRating > 5) {
+        safeRating = safeRating / 2;
+      }
+      if (safeRating !== undefined) {
+        safeRating = Math.min(5, Math.max(0, safeRating));
+      }
 
       setAiDiscoveredBook({
         Title: data.title,
         Author: data.author,
         Publisher: data.publisher,
-        "Published Date": data.publishedDate ? String(data.publishedDate).substring(0,4) : undefined,
+        "Published Date": data.publishedDate ? String(data.publishedDate).substring(0, 4) : undefined,
         Summary: data.summary,
         Pages: data.pages,
         "Image Url": data.imageUrl,
-        Genres: data.genres ? data.genres.join(', ') : undefined,
-        Tags: data.tags ? data.tags.join(', ') : undefined,
+        Genres: data.genres || data.category || '',
+        Tags: data.tags || '',
         Language: data.language,
         Rating: safeRating,
         Format: data.format,
         Series: data.series,
         Volume: data.volume,
         ISBN: pendingUnresolved,
+        "Item Url": data.itemUrl || '',
         "Added Date": new Date().toISOString()
       });
     } catch (err) {
       console.error(err);
-      addLog(`Deep scan failed to resolve ISBN ${pendingUnresolved}.`, 'error');
+      addLog(`Scan failed for ISBN ${pendingUnresolved}: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     } finally {
       setIsAiScanning(false);
     }
@@ -394,7 +372,7 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
                                 </div>
 
                                 <button 
-                                    onClick={handleAiDeepScan}
+                                    onClick={handleScraperScan}
                                     disabled={isAiScanning}
                                     className="w-full bg-brand-accent text-brand-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-sky-400 disabled:opacity-50 transition-all shadow-[0_0_20px_rgba(56,189,248,0.2)]"
                                 >
@@ -403,7 +381,7 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
                                     ) : (
                                         <SparklesIcon className="h-5 w-5" />
                                     )}
-                                    {isAiScanning ? 'INITIATING DEEP SCAN...' : 'AI DEEP SCAN'}
+                                    {isAiScanning ? 'SCANNING...' : 'SCAN (OPENLIBRARY + LUBIMYCZYTAC)'}
                                 </button>
                                 
                                 <div className="flex gap-3">
@@ -591,7 +569,7 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
               <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> CORE_ONLINE</span>
               <span className="flex items-center gap-2">BUFFER_ID: {checkLaterQueue.length}</span>
            </div>
-           <div className="opacity-40">PROTOCOL_V3.1 // AI_DEEP_ENGINE</div>
+           <div className="opacity-40">PROTOCOL_V3.1 // SCRAPER_ENGINE (OpenLibrary + lubimyczytac)</div>
         </footer>
       </div>
     </div>

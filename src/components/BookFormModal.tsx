@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Book } from '../App';
 import ImageUpload from './ImageUpload';
 import MultiTagInput from './MultiTagInput';
 import CoverSearchModal from './CoverSearchModal';
 import StyledDatalistInput from './StyledDatalistInput';
-import { SparklesIcon, ChevronDownIcon, SearchIcon } from './Icons';
+import { ChevronDownIcon, SearchIcon } from './Icons';
 
 interface BookFormModalProps {
   book: Book | Partial<Book> | null;
@@ -17,22 +16,6 @@ interface BookFormModalProps {
 
 const API_URL = (import.meta as any).env.VITE_API_URL || '';
 
-type AiField = 'summary' | 'genres' | 'tags' | 'publisher' | 'publishedDate' | 'pages' | 'language' | 'rating' | 'format' | 'series' | 'volume';
-
-const AiFieldLabels: Record<AiField, string> = {
-  summary: 'Summary',
-  genres: 'Genres',
-  tags: 'Tags',
-  publisher: 'Publisher',
-  publishedDate: 'Published Year',
-  pages: 'Pages',
-  language: 'Language',
-  rating: 'Rating (0-5)',
-  format: 'Format',
-  series: 'Series Name',
-  volume: 'Volume Number'
-};
-
 const normalizeValue = (val: string) => {
   const trimmed = val.trim();
   if (!trimmed) return '';
@@ -42,11 +25,7 @@ const normalizeValue = (val: string) => {
 const BookFormModal: React.FC<BookFormModalProps> = ({ book, books, onClose, onSave }) => {
   const [formData, setFormData] = useState<Partial<Book>>(book || {});
   const [isSaving, setIsSaving] = useState(false);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
-  const [selectedAiFields, setSelectedAiFields] = useState<AiField[]>([]);
   const [isCoverSearchModalOpen, setIsCoverSearchModalOpen] = useState(false);
-  const aiSettingsRef = useRef<HTMLDivElement>(null);
 
   const uniqueValues = useMemo(() => {
     const formats = new Set<string>();
@@ -91,169 +70,19 @@ const BookFormModal: React.FC<BookFormModalProps> = ({ book, books, onClose, onS
     };
   }, [books]);
   
-  const initialSearchQuery = useMemo(() => {
-    const firstAuthor = (formData.Author || '').split(/[,;]/)[0].trim();
-    return `${formData.Title || ''} ${firstAuthor}`.trim();
-  }, [formData.Title, formData.Author]);
-
-  useEffect(() => {
-    setFormData(book || {});
-    // Auto-select empty fields for AI Magic
-    const emptyFields: AiField[] = [];
-    if (!book?.Summary) emptyFields.push('summary');
-    if (!book?.Genres) emptyFields.push('genres');
-    if (!book?.Tags) emptyFields.push('tags');
-    if (!book?.Publisher) emptyFields.push('publisher');
-    if (!book?.['Published Date']) emptyFields.push('publishedDate');
-    if (!book?.Pages) emptyFields.push('pages');
-    if (!book?.Language) emptyFields.push('language');
-    if (book?.Rating === null || book?.Rating === undefined) emptyFields.push('rating');
-    if (!book?.Format) emptyFields.push('format');
-    if (!book?.Series) emptyFields.push('series');
-    if (book?.Volume === null || book?.Volume === undefined) emptyFields.push('volume');
-    
-    setSelectedAiFields(emptyFields);
-  }, [book]);
-
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
       }
     };
-    const handleClickOutside = (event: MouseEvent) => {
-        if (aiSettingsRef.current && !aiSettingsRef.current.contains(event.target as Node)) {
-            setIsAiSettingsOpen(false);
-        }
-    };
     window.addEventListener('keydown', handleEsc);
-    document.addEventListener('mousedown', handleClickOutside);
     return () => {
         window.removeEventListener('keydown', handleEsc);
-        document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [onClose]);
 
-  const toggleAiField = (field: AiField) => {
-    setSelectedAiFields(prev => 
-        prev.includes(field) ? prev.filter(f => f !== field) : [...prev, field]
-    );
-  };
 
-  const handleAiMagic = async () => {
-    if (!formData.Title || !formData.Author) {
-      alert("Please enter Title and Author to use AI Magic.");
-      return;
-    }
-
-    if (selectedAiFields.length === 0) {
-      alert("Select at least one field to fill.");
-      return;
-    }
-
-    const key = (process.env.API_KEY || '').trim();
-    if (!key || key === 'WKLEJ_TU_SWOJ_KLUCZ') {
-      alert("Error: Valid Gemini API Key not found in system environment.");
-      return;
-    }
-
-    setIsAiLoading(true);
-    setIsAiSettingsOpen(false);
-    
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      
-      const properties: any = {};
-      const required: string[] = [];
-      
-      if (selectedAiFields.includes('summary')) {
-          properties.summary = { type: Type.STRING, description: "Krótki, interesujący opis książki po polsku." };
-          required.push("summary");
-      }
-      if (selectedAiFields.includes('genres')) {
-          properties.genres = { type: Type.ARRAY, items: { type: Type.STRING }, description: "Gatunki literackie po polsku." };
-          required.push("genres");
-      }
-      if (selectedAiFields.includes('tags')) {
-          properties.tags = { type: Type.ARRAY, items: { type: Type.STRING }, description: "Tagi po polsku." };
-          required.push("tags");
-      }
-      if (selectedAiFields.includes('publisher')) {
-          properties.publisher = { type: Type.STRING, description: "Wydawnictwo." };
-          required.push("publisher");
-      }
-      if (selectedAiFields.includes('publishedDate')) {
-          properties.publishedDate = { type: Type.STRING, description: "Rok wydania (YYYY)." };
-          required.push("publishedDate");
-      }
-      if (selectedAiFields.includes('pages')) {
-          properties.pages = { type: Type.INTEGER, description: "Liczba stron." };
-          required.push("pages");
-      }
-      if (selectedAiFields.includes('language')) {
-          properties.language = { type: Type.STRING, description: "Język (np. Polski, Angielski)." };
-          required.push("language");
-      }
-      if (selectedAiFields.includes('rating')) {
-          properties.rating = { type: Type.NUMBER, description: "Średnia ocena na ŚCISŁEJ skali 0.0-5.0. Jeśli źródło podaje skalę 0-10, podziel wynik przez dwa." };
-          required.push("rating");
-      }
-      if (selectedAiFields.includes('format')) {
-          properties.format = { type: Type.STRING, description: "Format (np. Oprawa twarda, Oprawa miękka)." };
-          required.push("format");
-      }
-      if (selectedAiFields.includes('series')) {
-          properties.series = { type: Type.STRING, description: "Nazwa serii/cyklu." };
-          required.push("series");
-      }
-      if (selectedAiFields.includes('volume')) {
-          properties.volume = { type: Type.INTEGER, description: "Numer tomu." };
-          required.push("volume");
-      }
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Provide metadata for the book: "${formData.Title}" by ${formData.Author}. Use Polish sites like lubimyczytac.pl for accuracy. Summary, genres, tags must be in Polish. Year YYYY. IMPORTANT: Any rating must be normalized to a 0.0 - 5.0 scale.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties,
-            required
-          }
-        }
-      });
-
-      const text = response.text;
-      if (!text) throw new Error("Empty AI response");
-      const data = JSON.parse(text);
-      
-      // Safety clamp for rating
-      const rawRating = data.rating !== undefined ? Number(data.rating) : undefined;
-      const safeRating = rawRating !== undefined ? Math.min(5, Math.max(0, rawRating)) : undefined;
-
-      setFormData(prev => ({
-        ...prev,
-        Summary: data.summary || prev.Summary,
-        Genres: data.genres ? data.genres.map((g: string) => normalizeValue(g)).join(', ') : prev.Genres,
-        Tags: data.tags ? data.tags.map((t: string) => normalizeValue(t)).join(', ') : prev.Tags,
-        Publisher: data.publisher || prev.Publisher,
-        "Published Date": data.publishedDate ? String(data.publishedDate).substring(0,4) : prev["Published Date"],
-        Pages: data.pages || prev.Pages,
-        Language: data.language || prev.Language,
-        Rating: safeRating !== undefined ? safeRating : prev.Rating,
-        Format: data.format || prev.Format,
-        Series: data.series || prev.Series,
-        Volume: data.volume !== undefined ? data.volume : prev.Volume
-      }));
-    } catch (err) {
-      console.error(err);
-      alert("AI Magic failed to retrieve data.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -310,6 +139,10 @@ const BookFormModal: React.FC<BookFormModalProps> = ({ book, books, onClose, onS
   const inputStyle = "bg-slate-700 p-2 rounded-md w-full border-transparent focus:outline-none focus:ring-2 focus:ring-brand-accent transition-all";
   const formatDateForInput = (dateString?: string | null) => dateString ? dateString.substring(0, 10) : '';
   const coverForPreview = typeof formData['Image Url'] === 'string' ? formData['Image Url'] : (formData['Icon Path'] || '');
+  const initialSearchQuery = useMemo(() => {
+    const firstAuthor = (formData.Author || '').split(/[,;]/)[0].trim();
+    return `${formData.Title || ''} ${firstAuthor}`.trim();
+  }, [formData.Title, formData.Author]);
 
   return (
     <>
@@ -320,51 +153,6 @@ const BookFormModal: React.FC<BookFormModalProps> = ({ book, books, onClose, onS
           <div className="flex justify-between items-center mb-6 pr-10">
             <h2 className="text-2xl font-bold text-brand-text">{formData.ID ? 'Edit Book' : 'Add New Book'}</h2>
             
-            <div className="relative" ref={aiSettingsRef}>
-                <button 
-                  type="button"
-                  onClick={() => setIsAiSettingsOpen(!isAiSettingsOpen)}
-                  disabled={isAiLoading || !formData.Title || !formData.Author}
-                  className="flex items-center gap-2 bg-gradient-to-r from-brand-accent to-sky-600 text-brand-primary font-bold py-1.5 px-3 rounded-lg shadow-lg shadow-brand-accent/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100 text-xs uppercase tracking-widest"
-                >
-                  {isAiLoading ? (
-                    <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <SparklesIcon className="h-3.5 w-3.5" />
-                  )}
-                  AI Magic
-                  <ChevronDownIcon className={`h-3 w-3 transition-transform ${isAiSettingsOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isAiSettingsOpen && (
-                    <div className="absolute right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
-                        <div className="flex justify-between items-center mb-3">
-                           <h3 className="text-xs font-bold text-brand-accent uppercase tracking-widest">AI Config</h3>
-                           <button onClick={() => setSelectedAiFields([])} className="text-[10px] text-brand-subtle hover:text-white underline">Clear All</button>
-                        </div>
-                        <div className="space-y-1.5 mb-4 max-h-60 overflow-y-auto pr-1">
-                            {(Object.keys(AiFieldLabels) as AiField[]).map(field => (
-                                <label key={field} className="flex items-center gap-3 cursor-pointer group hover:bg-slate-700/50 p-1.5 rounded transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedAiFields.includes(field)}
-                                        onChange={() => toggleAiField(field)}
-                                        className="w-4 h-4 rounded accent-brand-accent"
-                                    />
-                                    <span className="text-sm text-brand-text group-hover:text-brand-accent transition-colors">{AiFieldLabels[field]}</span>
-                                </label>
-                            ))}
-                        </div>
-                        <button 
-                            type="button"
-                            onClick={handleAiMagic}
-                            className="w-full bg-brand-accent text-brand-primary font-bold py-2 rounded-lg text-sm hover:bg-sky-400 transition-colors shadow-lg shadow-brand-accent/20"
-                        >
-                            RUN INTELLIGENT FILL
-                        </button>
-                    </div>
-                )}
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

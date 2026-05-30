@@ -1,5 +1,5 @@
 {
-  "name": "Home Book Library v1",
+  "name": "Home Book Library",
   "description": "A modern web application for personal book cataloging, featuring smart data fetching, CSV import/export, and a persistent library storage system.",
   "requestFramePermissions": []
 }

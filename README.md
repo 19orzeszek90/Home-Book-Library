@@ -5,7 +5,7 @@
   <img src="screenshot.jpg" alt="Home Book Library App Preview" width="800">
 </p>
 
-A professional, high-performance web application designed for bibliophiles who need more than just a list. Home Book Library is a complete ecosystem for cataloging, managing, and discovering your collection, powered by modern tech and AI.
+A professional, high-performance web application designed for bibliophiles who need more than just a list. Home Book Library is a complete ecosystem for cataloging, managing, and discovering your collection — no AI required.
 
 ---
 
@@ -13,66 +13,87 @@ A professional, high-performance web application designed for bibliophiles who n
 
 ### 💎 Intelligent Collection Management
 - **Library & Wishlist:** Separate your current collection from your future reads.
-- **NEW: Collection View:** Automatically groups your books into series and cycles. Books are sorted by volume number (`Vol. 1`, `Vol. 2`), allowing you to visualize and complete your favorite sagas. Collapsible sections keep the interface clean and are collapsed by default.
-- **Dynamic Views:** Choose between `Compact`, `Default`, or `Cozy` grid sizes to suit your aesthetic.
+- **Collection View:** Automatically groups books into series and cycles, sorted by volume number. Collapsible sections keep the interface clean.
+- **Dynamic Views:** Choose between `Compact`, `Default`, or `Cozy` grid sizes.
 
-### 🤖 AI Librarian (Gemini API)
-- **AI Magic:** Automatically fill missing metadata (summaries, genres, tags, publishers) using the Gemini Pro model.
-- **Deep ISBN Scan:** If a standard database search fails, the AI performs a "Deep Scan" to identify rare or local editions.
-- **Interactive AI Librarian:** Chat with your library. Ask for recommendations based on what you own or get quick summaries of your books.
+### 📖 Quick Scan (ISBN) — NEW
+- **ISBN Barcode Scanner:** Just scan or type an ISBN → finds book data automatically.
+- **No AI, No API Keys:** Uses OpenLibrary (free API) as primary source, then enriches data from lubimyczytac.pl (ratings, series, translator, format, cover).
+- **Fallback Chain:** OpenLibrary → Startpage search → lubimyczytac.pl scrape (JSON-LD + HTML). If nothing found, allows manual entry.
+- **Polish Books Support:** Full support for Polish editions — ratings in 1-10 scale, Polish publishers, translators, categories.
 
 ### 🛠️ Professional Command Center
-- **Bulk Operations:** Select multiple books to update their language, format, shelf, or price simultaneously.
-- **Database Cleanup:** Manage all your genres and tags from a central hub. Merge duplicates or remove obsolete entries in bulk.
-- **Table View:** A powerful, sortable, and resizable data table for power users who prefer a spreadsheet-like experience.
+- **Bulk Operations:** Select multiple books to update language, format, shelf, or price simultaneously.
+- **Database Cleanup:** Manage all genres and tags from a central hub. Merge duplicates or remove obsolete entries.
+- **Table View:** A powerful, sortable, and resizable data table for power users.
 
 ### 📊 Advanced Analytics
-- **Reading Journey:** Track your annual progress with a visual goal banner.
-- **Financial Stats:** Monitor your library's economy with "Average Book Value" and "Estimated Total Library Value".
+- **Reading Journey:** Track annual reading progress with a visual goal banner.
+- **Financial Stats:** Monitor your library's economy with average book value and estimated total value.
 - **Visual Distributions:** High-quality charts showing genre, rating, and language distributions.
 
 ### 🔄 Data Integrity & Portability
-- **CSV Export/Import:** Move your data anywhere. **NEW:** Support for UTF-8 with BOM ensures that Polish and other special characters display perfectly in Microsoft Excel.
-- **Full JSON Backups:** Export your entire library, including book covers, into a single backup file for easy migration or restoration.
-- **Persistent Storage:** Fully dockerized with PostgreSQL and local volumes for images.
+- **CSV Export/Import:** UTF-8 with BOM for Excel compatibility (Polish characters display correctly).
+- **Full JSON Backups:** Export entire library including covers into a single backup file.
+- **Restore from Backup:** Import full JSON snapshots.
+- **Persistent Storage:** Fully dockerized with PostgreSQL and local volumes.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** React 19, Tailwind CSS, TypeScript, Vite.
-- **Backend:** Node.js, Express.js.
-- **Database:** PostgreSQL 14.
-- **AI:** Google Gemini API (@google/genai).
-- **Deployment:** Docker & Docker Compose.
+- **Frontend:** React 19 + TypeScript + Tailwind CSS + Vite
+- **Backend:** Node.js + Express
+- **Database:** PostgreSQL 14
+- **Scraping (no AI):** OpenLibrary API + Startpage search + lubimyczytac.pl HTML parsing
+- **Deployment:** Docker & Docker Compose
 
 ---
 
 ## ⚙️ Installation
 
-1. **Clone the Repo:**
-   ```bash
-   git clone https://github.com/19orzeszek90/Home-Book-Library-v1.git
-   cd Home-Book-Library-v1
-   ```
+### Quick Start (Docker)
 
-2. **Prepare Environment:**
-   - Rename `APP_BUILD_INSTRUCTIONS.txt` to `Dockerfile`.
-   - Rename `BUILD_CONTEXT_EXCLUSIONS_LIST.txt` to `.dockerignore`.
-   - **Gemini API Key:** You must generate your own API key to use AI features.
-     - Get it here: [Google AI Studio API Key](https://ai.google.dev/gemini-api/docs/api-key)
-     - In `docker-compose.yml`, replace `WKLEJ_TU_SWOJ_KLUCZ` with your key.
+```bash
+# 1. Clone
+git clone https://github.com/19orzeszek90/Home-Book-Library-v1.git
+cd Home-Book-Library-v1
 
-3. **Launch:**
-   ```bash
-   docker-compose up -d --build
-   ```
-   Access your library at `http://localhost:3001`.
+# 2. Build & launch
+docker compose up --build -d
+```
+
+Access your library at `http://localhost:3001`.
+
+### Configuration
+
+- **Port:** Change `3001:3000` in `docker-compose.yml` to any port you prefer.
+- **Database credentials:** Edit `POSTGRES_USER` / `POSTGRES_PASSWORD` in `docker-compose.yml` if needed.
+- **Scraping works out of the box** — no API keys needed. The Quick Scan feature uses:
+  1. OpenLibrary API (free, no key)
+  2. Startpage.com search (free, no key)
+  3. lubimyczytac.pl HTML scraping (free, no key)
+
+---
+
+## 📖 How Quick Scan Works
+
+The ISBN scanner uses a **zero-AI, zero-cost scraping pipeline:**
+
+```
+ISBN → OpenLibrary API (title, author, publisher)
+     → Startpage search by ISBN (find lubimyczytac.pl URL)
+     → Startpage search by title+author (fallback if ISBN not on LC)
+     → lubimyczytac.pl HTML scrape (ratings, series, format, translator, cover)
+     → Save to database
+```
+
+All data is extracted from structured HTML (JSON-LD schema + `<dt>/<dd>` tables + `data-ga-*` attributes). No AI, no API keys, no external services.
 
 ---
 
 ## 🛡️ License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 *Developed with passion for books and clean code.*
