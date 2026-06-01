@@ -153,6 +153,16 @@ app.get('/api/books', async (req, res) => {
     }
 });
 
+// Get unique bookshelves
+app.get('/api/bookshelves', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT DISTINCT "BookShelf" FROM books WHERE "BookShelf" IS NOT NULL AND "BookShelf" != \'\' ORDER BY "BookShelf"');
+        res.json(result.rows.map(r => r.BookShelf));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/books', async (req, res) => {
     const book = req.body;
     try {
@@ -385,17 +395,20 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// Skanowanie ISBN przez scraper (zamiennik Gemini AI)
+// Skanowanie ISBN przez scraper
 app.get('/api/scan-isbn/:isbn', async (req, res) => {
     const { isbn } = req.params;
     try {
         const result = await scanByIsbn(isbn);
-        if (result.error) {
-            return res.status(404).json({ error: result.error });
+        if (result.data) {
+            // Success: return book data + logs
+            res.json({ ...result.data, _logs: result.logs || [] });
+        } else {
+            // Error: return error + logs
+            res.status(404).json({ error: result.error, _logs: result.logs || [] });
         }
-        res.json(result);
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: e.message, _logs: [] });
     }
 });
 

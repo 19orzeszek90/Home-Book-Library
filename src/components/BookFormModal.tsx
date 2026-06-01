@@ -82,6 +82,19 @@ const BookFormModal: React.FC<BookFormModalProps> = ({ book, books, onClose, onS
     };
   }, [onClose]);
 
+  // Auto-select Bookshelf if only one exists (new book)
+  useEffect(() => {
+    if (formData.ID) return; // Editing existing book, don't override
+    fetch(`${API_URL}/api/bookshelves`)
+      .then(r => r.json())
+      .then((shelves: string[]) => {
+        if (shelves.length === 1 && !formData.BookShelf) {
+          setFormData(prev => ({ ...prev, BookShelf: shelves[0] }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {

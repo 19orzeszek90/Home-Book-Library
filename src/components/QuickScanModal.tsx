@@ -41,6 +41,8 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
     const saved = localStorage.getItem('dev_check_later_queue_v2');
     return saved ? JSON.parse(saved) : [];
   });
+  const [bookshelves, setBookshelves] = useState<string[]>([]);
+  const [selectedBookshelf, setSelectedBookshelf] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +51,19 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
   useEffect(() => {
     localStorage.setItem('dev_check_later_queue_v2', JSON.stringify(checkLaterQueue));
   }, [checkLaterQueue]);
+
+  // Fetch available bookshelves on mount
+  useEffect(() => {
+    fetch(`${API_URL}/api/bookshelves`)
+      .then(r => r.json())
+      .then((shelves: string[]) => {
+        setBookshelves(shelves);
+        if (shelves.length === 1) {
+          setSelectedBookshelf(shelves[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'scanner') {
@@ -88,11 +103,21 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
 
     try {
       const response = await fetch(`${API_URL}/api/scan-isbn/${encodeURIComponent(isbn)}`);
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status}`);
+      
+      // Try to parse logs even on error
+      const respData = await response.json().catch(() => ({}));
+      if (respData._logs && Array.isArray(respData._logs)) {
+        respData._logs.forEach((log: string) => {
+          if (log.startsWith('✓')) addLog(log, 'success');
+          else if (log.startsWith('✗')) addLog(log, 'error');
+          else addLog(log, 'info');
+        });
       }
-      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(respData.error || `HTTP ${response.status}`);
+      }
+      const data = respData;
 
       if (data.error) {
         addLog(`ISBN ${isbn} not found. Try manual entry.`, 'error');
@@ -128,6 +153,7 @@ const QuickScanModal: React.FC<QuickScanModalProps> = ({ books, onClose, onAddSu
         Tags: data.tags || '',
         Genres: data.genres || data.category || '',
         "Item Url": data.itemUrl || '',
+        BookShelf: selectedBookshelf || (bookshelves.length === 1 ? bookshelves[0] : ''),
         is_wishlist: false,
         "Added Date": new Date().toISOString()
       };

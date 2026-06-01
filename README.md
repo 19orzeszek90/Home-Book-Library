@@ -17,10 +17,11 @@ A professional, high-performance web application designed for bibliophiles who n
 - **Dynamic Views:** Choose between `Compact`, `Default`, or `Cozy` grid sizes.
 
 ### 📖 Quick Scan (ISBN)
-- **ISBN Barcode Scanner:** Scan or type an ISBN → automatically fetches book data.
-- **No AI, No API Keys:** Uses OpenLibrary (free API) as primary source, enriches data from lubimyczytac.pl (ratings, series, translator, format, cover).
-- **Fallback Chain:** OpenLibrary → Startpage search → lubimyczytac.pl HTML scrape (JSON-LD + data-ga-* attributes). If nothing found, allows manual entry.
-- **Polish Books Support:** Full support for Polish editions — ratings, publishers, translators, categories.
+- **ISBN Barcode Scanner:** Scan or type an ISBN → automatically fetches book data from multiple sources.
+- **No AI, No API Keys:** Uses free/open APIs and HTML scraping — no registration or tokens needed.
+- **Multi-Source Fallback Chain:** OpenLibrary (global) → Polish book databases (ratings, series, translator, format, cover, subjects) → final fallback OpenLibrary.
+- **Rich Metadata:** Automatically fills title, author, publisher, year, pages, description, rating, cover image, series, volume, translator, original title, format, language, subjects, shelf.
+- **Activity Feed:** Step-by-step scan log showing which sources were tried and what data was found (✓ success / ✗ fail / 🔍 in progress).
 
 ### 📖 Book Borrowing Module
 - **Track Borrowings:** Log who borrowed which book, with phone and email contact info.
@@ -52,7 +53,7 @@ A professional, high-performance web application designed for bibliophiles who n
 - **Frontend:** React 19 + TypeScript + Tailwind CSS + Vite
 - **Backend:** Node.js + Express
 - **Database:** PostgreSQL 14
-- **Scraping (no AI):** OpenLibrary API + Startpage search + lubimyczytac.pl HTML parsing
+- **Scraping (no AI):** OpenLibrary API + Polish book databases (HTML parsing via JSON-LD, structured tables, data attributes)
 - **Deployment:** Docker & Docker Compose
 
 ---
@@ -76,26 +77,41 @@ Access your library at `http://localhost:3001`.
 
 - **Port:** Change `3001:3000` in `docker-compose.yml` to any port you prefer.
 - **Database credentials:** Edit `POSTGRES_USER` / `POSTGRES_PASSWORD` in `docker-compose.yml` if needed.
-- **Scraping works out of the box** — no API keys needed. The Quick Scan feature uses:
-  1. OpenLibrary API (free, no key)
-  2. Startpage.com search (free, no key)
-  3. lubimyczytac.pl HTML scraping (free, no key)
+- **Scraping works out of the box** — no API keys needed. The Quick Scan feature discovers book data automatically.
 
 ---
 
 ## 📖 How Quick Scan Works
 
-The ISBN scanner uses a **zero-AI, zero-cost scraping pipeline:**
+The ISBN scanner uses a **zero-AI, zero-cost scraping pipeline** that combines multiple free sources:
 
 ```
-ISBN → OpenLibrary API (title, author, publisher)
-     → Startpage search by ISBN → lubimyczytac.pl URL
-     → Startpage search by title+author (fallback)
-     → lubimyczytac.pl HTML scrape (ratings, series, format, translator, cover)
-     → Save to database
+ISBN input
+  │
+  ├─▶ OpenLibrary API (title, author, publisher)
+  │     └─▶ Polish book database (description, rating, cover, series, translator, format)
+  │
+  ├─▶ Polish book database (direct ISBN lookup)
+  │     └─▶ Full metadata (description, rating, cover, series, translator, format)
+  │
+  └─▶ Polish catalog database (publisher, year, pages, place, subjects)
+        └─▶ Polish book database (by title+author → description, rating, cover)
 ```
 
-All data is extracted from structured HTML (JSON-LD schema + `<dt>/<dd>` tables + `data-ga-*` attributes). No AI, no API keys, no external services required.
+**Data sources:**
+- **OpenLibrary** — global open book database (free API, no key)
+- **Polish book databases** — HTML scraping with structured data extraction (JSON-LD, HTML tables, data attributes)
+- **Polish library catalogs** — MAK+ system data (publisher, place, subject headings)
+
+**All data extraction is deterministic** — no AI, no LLMs, no third-party API keys. Every field is parsed from structured HTML elements.
+
+### Activity Feed
+Each scan produces a detailed log visible in the Quick Scan modal:
+- **🔍** — source being queried
+- **✓** — data found (with details: description yes/no, rating value, etc.)
+- **✗** — source unavailable or not matching
+
+This makes it easy to see which sources provided which data.
 
 ---
 
