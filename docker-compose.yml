@@ -14,6 +14,8 @@ services:
       - DATABASE_URL=postgres://user:password@home-book-library-db:5432/homelibrary
       - NODE_ENV=production
       - PORT=3000
+      - BETTER_AUTH_SECRET=aHVnZV9zZWN1cmVfcHJvZHVjdGlvbl9zZWNyZXQ=
+      - BETTER_AUTH_URL=http://patryk-ubuntu:3001
 
   home-book-library-db:
     image: postgres:14-alpine

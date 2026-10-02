@@ -11,6 +11,13 @@ A professional, high-performance web application designed for bibliophiles who n
 
 ## 🚀 Key Features
 
+### 🔐 Multi-User Authentication
+- **Secure Login:** Email & password authentication with Better-Auth.
+- **User Roles:** Admin and regular user roles. Admins have access to user management.
+- **Per-User Isolation:** Each user sees only their own books — perfect for shared deployments.
+- **Admin Controls:** User management tab in Command Center. Admin can reset passwords and remove users (except themselves).
+- **Password Visibility Toggle:** Show/hide password during login and registration.
+
 ### 💎 Intelligent Collection Management
 - **Library & Wishlist:** Separate your current collection from your future reads.
 - **Collection View:** Automatically groups books into series and cycles, sorted by volume number. Collapsible sections keep the interface clean.
@@ -51,7 +58,7 @@ A professional, high-performance web application designed for bibliophiles who n
 ## 🛠️ Tech Stack
 
 - **Frontend:** React 19 + TypeScript + Tailwind CSS + Vite
-- **Backend:** Node.js + Express
+- **Backend:** Node.js + Express + Better-Auth (authentication)
 - **Database:** PostgreSQL 14
 - **Scraping (no AI):** OpenLibrary API + Polish book databases (HTML parsing via JSON-LD, structured tables, data attributes)
 - **Deployment:** Docker & Docker Compose
@@ -71,12 +78,13 @@ cd Home-Book-Library
 docker compose up --build -d
 ```
 
-Access your library at `http://localhost:3001`.
+Access your library at `http://localhost:3001` and register the first account (will be automatically promoted to admin).
 
 ### Configuration
 
 - **Port:** Change `3001:3000` in `docker-compose.yml` to any port you prefer.
 - **Database credentials:** Edit `POSTGRES_USER` / `POSTGRES_PASSWORD` in `docker-compose.yml` if needed.
+- **Authentication secret:** Set `BETTER_AUTH_SECRET` in `docker-compose.yml` — generate one with `openssl rand -base64 32`.
 - **Scraping works out of the box** — no API keys needed. The Quick Scan feature discovers book data automatically.
 
 ---

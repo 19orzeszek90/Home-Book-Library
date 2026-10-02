@@ -1,6 +1,5 @@
-
 # Stage 1: Build the React frontend
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -11,7 +10,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Create the production image
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -19,7 +18,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY server.js scraper-service.js ./
+COPY server.mjs scraper-service.js ./
 
 # Create storage and upload directories and set permissions
 RUN mkdir -p /app/storage/covers /app/uploads && \
@@ -29,4 +28,4 @@ USER node
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "server.mjs"]

@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { DownloadIcon, UploadIcon, HardDriveIcon } from './Icons';
 
 interface BackupRestoreModalProps {
@@ -7,9 +7,11 @@ interface BackupRestoreModalProps {
   onExportCSV: () => void;
   onFullBackup: () => void;
   onRestore: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  restoreProgress?: { step: string; message: string; current?: number; total?: number } | null;
+  isRestoring?: boolean;
 }
 
-const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ onClose, onExportCSV, onFullBackup, onRestore }) => {
+const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ onClose, onExportCSV, onFullBackup, onRestore, restoreProgress, isRestoring }) => {
   const restoreFileRef = useRef<HTMLInputElement>(null);
 
   const handleTriggerRestore = () => {
@@ -76,21 +78,35 @@ const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ onClose, onExpo
 
           {/* Restore Section */}
           <div>
-            <h3 className="text-[10px] font-mono font-bold text-brand-accent uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-brand-accent shadow-[0_0_8px_#38bdf8]"></div>
-                Inbound Data Restore
-            </h3>
-            <div className="bg-slate-900/50 border border-white/5 p-6 rounded-2xl relative group overflow-hidden">
-                <div className="absolute inset-0 bg-brand-accent/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-                <p className="text-[10px] font-mono text-brand-subtle uppercase mb-6 tracking-tighter opacity-70 text-center leading-relaxed">
-                    Access Core System Snapshots (.json) to re-synchronize node. System will automatically resolve identity overlaps.
-                </p>
-                <input type="file" ref={restoreFileRef} onChange={onRestore} accept=".json" className="hidden" />
-                <button onClick={handleTriggerRestore} className="w-full bg-brand-accent text-brand-primary font-mono font-bold py-4 rounded-xl flex items-center justify-center gap-3 uppercase text-xs tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-accent/10">
-                    <UploadIcon className="h-5 w-5" />
-                    Initiate_Restore_Sequence
-                </button>
-            </div>
+          <h3 className="text-[10px] font-mono font-bold text-brand-accent uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-brand-accent shadow-[0_0_8px_#38bdf8]"></div>
+              Inbound Data Restore
+          </h3>
+          <div className="bg-slate-900/50 border border-white/5 p-6 rounded-2xl relative group overflow-hidden">
+              <div className="absolute inset-0 bg-brand-accent/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+              <p className="text-[10px] font-mono text-brand-subtle uppercase mb-6 tracking-tighter opacity-70 text-center leading-relaxed">
+                  Access Core System Snapshots (.json) to re-synchronize node. System will automatically resolve identity overlaps.
+              </p>
+              <input type="file" ref={restoreFileRef} onChange={onRestore} accept=".json" className="hidden" />
+              <button onClick={handleTriggerRestore} className="w-full bg-brand-accent text-brand-primary font-mono font-bold py-4 rounded-xl flex items-center justify-center gap-3 uppercase text-xs tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-accent/10">
+                  <UploadIcon className="h-5 w-5" />
+                  Initiate_Restore_Sequence
+              </button>
+              {isRestoring && restoreProgress && (
+                  <div className="mt-4 space-y-2">
+                      <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                          {restoreProgress.total ? (
+                              <div className="bg-brand-accent h-full rounded-full transition-all duration-300" style={{ width: `${Math.round((restoreProgress.current || 0) / restoreProgress.total * 100)}%` }}></div>
+                          ) : (
+                              <div className="bg-brand-accent h-full rounded-full w-1/3 animate-pulse"></div>
+                          )}
+                      </div>
+                      <p className="text-[10px] font-mono text-brand-accent text-center uppercase tracking-widest opacity-80">
+                          {restoreProgress.message}
+                      </p>
+                  </div>
+              )}
+          </div>
           </div>
         </div>
         

@@ -10,6 +10,8 @@ import {
 } from './Icons';
 import Tag from './Tag';
 import { useConfirmation } from '../contexts/ConfirmationContext';
+import UsersTab from './UsersTab';
+import { authClient } from '../lib/auth-client';
 
 interface CommandCenterProps {
   books: Book[];
@@ -30,7 +32,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
   const [tableSearch, setTableSearch] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: null });
-  const [tab, setTab] = useState<'books' | 'borrowings'>('books');
+  const [tab, setTab] = useState<'books' | 'borrowings' | 'users'>('books');
   const [borrowings, setBorrowings] = useState<any[]>([]);
   const [borrowingsLoaded, setBorrowingsLoaded] = useState(false);
   
@@ -39,6 +41,8 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
   const [bulkValue, setBulkValue] = useState<string>('');
 
   const { showConfirmation } = useConfirmation();
+  const { data: sessionData } = authClient.useSession() as any;
+  const isAdmin = sessionData?.user?.role === 'admin';
 
   const handleSort = (key: keyof Book) => {
     let direction: 'asc' | 'desc' | null = 'asc';
@@ -228,13 +232,18 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-0 mb-4 bg-slate-900/50 rounded-xl p-1 border border-white/5 self-start">
+      <div className="flex gap-0 mb-4 bg-slate-900/50 rounded-xl p-1 border border-white/5 self-start flex-wrap">
         <button onClick={() => setTab('books')} className={`px-6 py-2 text-xs font-mono uppercase tracking-widest rounded-lg transition-all ${tab === 'books' ? 'bg-brand-accent text-brand-primary font-bold' : 'text-brand-subtle hover:text-brand-text'}`}>
           📚 Books ({books.length})
         </button>
         <button onClick={() => setTab('borrowings')} className={`px-6 py-2 text-xs font-mono uppercase tracking-widest rounded-lg transition-all ${tab === 'borrowings' ? 'bg-brand-accent text-brand-primary font-bold' : 'text-brand-subtle hover:text-brand-text'}`}>
           📖 Borrowings ({borrowings.length})
         </button>
+        {isAdmin && (
+          <button onClick={() => setTab('users')} className={`px-6 py-2 text-xs font-mono uppercase tracking-widest rounded-lg transition-all ${tab === 'users' ? 'bg-brand-accent text-brand-primary font-bold' : 'text-brand-subtle hover:text-brand-text'}`}>
+            👥 Users
+          </button>
+        )}
       </div>
 
       {/* Bulk Action Bar */}
@@ -407,16 +416,14 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
                         <span>👤 {b.BorrowerName}</span>
                         {b.Phone && <span>📞 {b.Phone}</span>}
                         {b.Email && <span>✉️ {b.Email}</span>}
-                        <span>📅 {b.BorrowDate?.slice(0,10)} → {b.ReturnedDate?.slice(0,10) || <span className="text-amber-400">{b.DueDate?.slice(0,10)}{overdue ? ' ❗' : ''}</span>}</span>
+                        <span>📅 {b.BorrowDate?.slice(0, 10)} → {b.DueDate?.slice(0, 10)}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      {!b.ReturnedDate && (
-                        <button onClick={() => handleReturnBorrowing(b.ID)} className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/30 font-bold py-2 px-3 rounded-lg text-[10px] uppercase tracking-widest transition-all">
-                          Return
-                        </button>
-                      )}
-                    </div>
+                    {!b.ReturnedDate && (
+                      <button onClick={() => handleReturnBorrowing(b.ID)} className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white border border-emerald-500/30 font-mono font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-widest transition-all shrink-0">
+                        Return
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -425,7 +432,11 @@ const CommandCenter: React.FC<CommandCenterProps> = ({ books, onClose, onRefresh
         </div>
       )}
 
-      <footer className="mt-4 flex justify-between items-center text-[10px] font-mono text-slate-600 uppercase tracking-[0.2em]">
+      {tab === 'users' && (
+        <UsersTab />
+      )}
+      
+     <footer className="mt-4 flex justify-between items-center text-[10px] font-mono text-slate-600 uppercase tracking-[0.2em]">
           <div className="flex gap-6">
               <span>DB_SIZE: {books.length} ROWS</span>
               <span>FILTERED: {processedBooks.length} ROWS</span>

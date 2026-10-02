@@ -14,9 +14,10 @@ import ReadingGoalBanner from './components/ReadingGoalBanner';
 import ViewSwitcher from './components/ViewSwitcher';
 import SortControls, { SortKey, SortDirection } from './components/SortControls';
 import SortModal from './components/SortModal';
-import AIAssistantModal from './components/AIAssistantModal';
+import AuthModal from './components/AuthModal';
 import { PlusIcon, BookOpenIcon, CogIcon, ChartBarIcon, AdjustmentsIcon, SearchIcon, HardDriveIcon, SparklesIcon, TerminalIcon } from './components/Icons';
 import { ConfirmationProvider, useConfirmation } from './contexts/ConfirmationContext';
+import { authClient } from './lib/auth-client';
 
 export interface Book {
   ID: number;
@@ -66,6 +67,8 @@ function AppContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isSearchHovered, setIsSearchHovered] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
   const [viewMode, setViewMode] = useState<ViewMode>('library');
   const [gridSize, setGridSize] = useState<GridSize>(() => {
@@ -77,11 +80,12 @@ function AppContent() {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isJourneyModalOpen, setIsJourneyModalOpen] = useState(false);
   const [isBackupRestoreModalOpen, setIsBackupRestoreModalOpen] = useState(false);
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const [isSettingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [isSortModalOpen, setIsSortModalOpen] = useState(false);
   const [returnToQuickScan, setReturnToQuickScan] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<{ step: string; message: string; current?: number; total?: number } | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const [editingBook, setEditingBook] = useState<Book | Partial<Book> | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -125,6 +129,20 @@ function AppContent() {
     localStorage.setItem('sortBy', sortBy);
     localStorage.setItem('sortDirection', sortDirection);
   }, [sortBy, sortDirection]);
+
+  // Load session on mount
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await authClient.getSession({ query: {} });
+      setSession(data);
+    };
+    load();
+  }, []);
+
+  const handleLogout = async () => {
+    await authClient.signOut({});
+    setSession(null);
+  };
 
   useEffect(() => {
     fetchBooks();
@@ -270,22 +288,37 @@ function AppContent() {
   };
 
   const handleFileRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    setIsBackupRestoreModalOpen(false);
     const file = event.target.files?.[0];
     if (!file) return;
     const formData = new FormData();
     formData.append('restorefile', file);
-    setProcessingStatus('Restoring from backup...');
-    setIsProcessing(true);
+    setIsRestoring(true);
+    setRestoreProgress({ step: 'start', message: 'Starting restore...' });
+
+    const eventSource = new EventSource(`${API_URL}/api/restore/progress`);
+    eventSource.onmessage = (e) => {
+        try { setRestoreProgress(JSON.parse(e.data)); } catch {}
+    };
+    eventSource.onerror = () => {};
+
     try {
         const response = await fetch(`${API_URL}/api/books/restore/full`, { method: 'POST', body: formData });
-        if (!response.ok) throw new Error('Restore failed.');
+        const result = await response.json().catch(() => ({}));
+        eventSource.close();
+        if (!response.ok) {
+            throw new Error(result.message || result.error || `HTTP ${response.status}`);
+        }
+        setRestoreProgress({ step: 'done', message: 'Restore complete!' });
         showConfirmation({ title: 'Restore Complete', message: 'Database successfully restored.', confirmText: 'OK' });
         fetchBooks();
     } catch (err) {
-        showConfirmation({ title: 'Restore Failed', message: 'An error occurred during restore.', confirmText: 'OK', confirmVariant: 'danger' });
+        eventSource.close();
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        showConfirmation({ title: 'Restore Failed', message: errMsg, confirmText: 'OK', confirmVariant: 'danger' });
     } finally {
-        setIsProcessing(false);
+        setIsRestoring(false);
+        setRestoreProgress(null);
+        setIsBackupRestoreModalOpen(false);
     }
   };
 
@@ -364,6 +397,13 @@ function AppContent() {
                 )}
               </div>
 
+              {/* Logout button when session exists */}
+              {session && (
+                <button onClick={async () => { await authClient.signOut({}); setSession(null); window.location.reload(); }} className="p-2.5 bg-slate-900/50 hover:bg-red-900/50 text-brand-subtle hover:text-red-400 border border-white/5 rounded-lg transition-all" title="Sign out">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+              )}
+
               <div className="relative" ref={settingsMenuRef}>
                 <button onClick={() => setSettingsMenuOpen(!isSettingsMenuOpen)} className="p-2.5 bg-slate-900/50 hover:bg-slate-800 text-brand-subtle border border-white/5 rounded-lg transition-all" aria-label="Settings">
                   <CogIcon className="h-6 w-6" />
@@ -391,9 +431,15 @@ function AppContent() {
           </div>
         </nav>
       </header>
-      
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {viewMode === 'command-center' ? (
+        {!session ? (
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <p className="text-[#94A3B8] text-sm mb-4">Sign in to access your library</p>
+            <button onClick={() => setIsAuthModalOpen(true)} className="bg-[#38BDF8] text-[#0F172A] font-bold px-6 py-3 rounded-xl hover:shadow-[0_4px_20px_rgba(56,189,248,0.3)] transition-all">
+              Sign In
+            </button>
+          </div>
+        ) : viewMode === 'command-center' ? (
             <CommandCenter 
                 books={books} 
                 onClose={() => setViewMode('library')} 
@@ -465,11 +511,11 @@ function AppContent() {
       {isFormModalOpen && <BookFormModal book={editingBook} books={books} onClose={() => { setIsFormModalOpen(false); setEditingBook(null); }} onSave={handleFormSave} />}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
       {isJourneyModalOpen && <ReadingJourneyModal books={libraryBooks} onClose={() => setIsJourneyModalOpen(false)} onBookSelect={handleShowDetails}/>}
-      {isBackupRestoreModalOpen && <BackupRestoreModal onClose={() => setIsBackupRestoreModalOpen(false)} onExportCSV={() => window.location.href=`${API_URL}/api/books/export`} onFullBackup={handleFullBackup} onRestore={handleFileRestore} />}
-      {isAiAssistantOpen && <AIAssistantModal books={books} onClose={() => setIsAiAssistantOpen(false)} onBookSelect={handleShowDetails} />}
+      {isBackupRestoreModalOpen && <BackupRestoreModal onClose={() => setIsBackupRestoreModalOpen(false)} onExportCSV={() => window.location.href=`${API_URL}/api/books/export`} onFullBackup={handleFullBackup} onRestore={handleFileRestore} restoreProgress={restoreProgress} isRestoring={isRestoring} />}
       {isSortModalOpen && <SortModal isOpen={isSortModalOpen} onClose={() => setIsSortModalOpen(false)} currentSortBy={sortBy} currentSortDirection={sortDirection} onApplySort={(key, dir) => { handleSortChange(key, dir); setIsSortModalOpen(false); }} />}
       {selectedBook && <BookDetailModal book={selectedBook} onClose={() => setSelectedBook(null)} onEdit={() => { setSelectedBook(null); handleOpenFormModal(selectedBook); }} onDelete={() => { setSelectedBook(null); handleDeleteBook(selectedBook.ID); }} onMoveToLibrary={() => handleMoveToLibrary(selectedBook)} onBorrow={() => setBorrowModalBook(selectedBook)} onReturn={async () => { const b = borrowings.find((x: any) => x.BookID === selectedBook.ID && !x.ReturnedDate); if (b) { await fetch(`${API_URL}/api/borrowings/${b.ID}/return`, { method: 'PUT' }); fetchBorrowings(); setSelectedBook(null); } }} activeBorrowing={borrowings.find((b: any) => b.BookID === selectedBook.ID && !b.ReturnedDate) || null} />}
       {borrowModalBook && <BorrowFormModal bookTitle={borrowModalBook.Title || ''} bookId={borrowModalBook.ID} existingBorrowing={borrowings.find((b: any) => b.BookID === borrowModalBook.ID && !b.ReturnedDate) || null} onClose={() => setBorrowModalBook(null)} onSaved={fetchBorrowings} />}
+      {isAuthModalOpen && <AuthModal onClose={() => setIsAuthModalOpen(false)} onAuthenticated={() => { authClient.getSession({ query: {} }).then(({data}) => setSession(data)); }} />}
     </div>
   );
 }
